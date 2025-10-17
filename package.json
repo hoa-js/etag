@@ -1,0 +1,62 @@
+{
+  "name": "@hoajs/etag",
+  "version": "0.1.0",
+  "description": "ETag middleware for Hoa.",
+  "main": "./dist/cjs/index.js",
+  "type": "module",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/esm/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js",
+      "default": "./dist/esm/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "lint": "eslint .",
+    "type-check": "tsc --noEmit",
+    "build": "tsup",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "prepublishOnly": "npm run type-check && npm run lint && npm run test && npm run build",
+    "prepare": "husky"
+  },
+  "author": "RosApr",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hoa-js/etag.git"
+  },
+  "keywords": [
+    "hoa",
+    "middleware",
+    "etag"
+  ],
+  "devDependencies": {
+    "@commitlint/cli": "20.1.0",
+    "@commitlint/config-conventional": "20.0.0",
+    "@hoajs/router": "0.3.0",
+    "@jest/globals": "^30.2.0",
+    "@types/jest": "30.0.0",
+    "eslint": "9.37.0",
+    "hoa": "*",
+    "husky": "9.1.7",
+    "jest": "30.2.0",
+    "neostandard": "0.12.2",
+    "ts-jest": "29.4.5",
+    "ts-node": "^10.9.2",
+    "tsup": "8.5.0",
+    "typescript": "5.9.3"
+  },
+  "peerDependencies": {
+    "hoa": "*"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

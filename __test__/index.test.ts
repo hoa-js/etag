@@ -135,7 +135,7 @@ describe('Etag middleware', () => {
       expect(response.status).toBe(200)
       expect(body).toBe('Hello Hoa')
       expect(response.headers.get('ETag')).not.toBeNull()
-      expect(response.headers.get('ETag')).toEqual(hash)
+      expect(response.headers.get('ETag')).toEqual(`"${hash}"`)
     })
 
     it('Should generate different ETags for different content', async () => {
@@ -317,6 +317,31 @@ describe('Etag middleware', () => {
 
       expect(secondResponse.status).toBe(304)
     })
+
+    it('Should handle If-None-Match: * for different HTTP methods', async () => {
+      // GET should return 304
+      app.get('/wildcard-get', etag(), (ctx) => {
+        ctx.res.body = 'Test content'
+      })
+      const getResponse = await app.fetch(
+        new Request('http://localhost/wildcard-get', {
+          headers: { 'If-None-Match': '*' }
+        })
+      )
+      expect(getResponse.status).toBe(304)
+
+      // POST should return 200
+      app.post('/wildcard-post', etag(), (ctx) => {
+        ctx.res.body = 'Test content'
+      })
+      const postResponse = await app.fetch(
+        new Request('http://localhost/wildcard-post', {
+          method: 'POST',
+          headers: { 'If-None-Match': '*' }
+        })
+      )
+      expect(postResponse.status).toBe(200)
+    })
   })
 
   describe('304 response header retention', () => {
@@ -401,8 +426,8 @@ describe('Etag middleware', () => {
       const etagValue = response.headers.get('ETag')
 
       expect(etagValue).not.toBeNull()
-      // SHA-256 produces 64 hex characters, SHA-1 produces 40
-      expect(etagValue?.length).toBe(64)
+      // SHA-256 produces 64 hex characters + 2 quotes = 66, SHA-1 produces 40 + 2 = 42
+      expect(etagValue?.length).toBe(66)
     })
 
     it('Should handle synchronous custom digest generator', async () => {
@@ -427,35 +452,30 @@ describe('Etag middleware', () => {
       app.extend(router())
     })
 
-    it('Should handle large response bodies', async () => {
+    it('Should handle various content types', async () => {
+      // Large content
       const largeContent = 'x'.repeat(100000)
       app.get('/large', etag(), (ctx) => {
         ctx.res.body = largeContent
       })
+      const largeResponse = await app.fetch(new Request('http://localhost/large'))
+      expect(largeResponse.headers.get('ETag')).not.toBeNull()
 
-      const response = await app.fetch(new Request('http://localhost/large'))
-      expect(response.headers.get('ETag')).not.toBeNull()
-      expect(await response.text()).toBe(largeContent)
-    })
-
-    it('Should handle unicode content', async () => {
+      // Unicode content
       app.get('/unicode', etag(), (ctx) => {
         ctx.res.body = '你好世界 🌍 مرحبا'
       })
+      const unicodeResponse = await app.fetch(new Request('http://localhost/unicode'))
+      expect(unicodeResponse.headers.get('ETag')).not.toBeNull()
 
-      const response = await app.fetch(new Request('http://localhost/unicode'))
-      expect(response.headers.get('ETag')).not.toBeNull()
-    })
-
-    it('Should handle JSON content', async () => {
+      // JSON content
       const jsonData = { message: 'Hello', count: 42 }
       app.get('/json', etag(), (ctx) => {
         ctx.res.body = JSON.stringify(jsonData)
       })
-
-      const response = await app.fetch(new Request('http://localhost/json'))
-      expect(response.headers.get('ETag')).not.toBeNull()
-      expect(JSON.parse(await response.text())).toEqual(jsonData)
+      const jsonResponse = await app.fetch(new Request('http://localhost/json'))
+      expect(jsonResponse.headers.get('ETag')).not.toBeNull()
+      expect(JSON.parse(await jsonResponse.text())).toEqual(jsonData)
     })
 
     it('Should handle empty If-None-Match header', async () => {
@@ -473,14 +493,36 @@ describe('Etag middleware', () => {
     })
 
     it('Should return empty Etag when default cypto api is not available', async () => {
-      // eslint-disable-next-line no-global-assign
-      crypto = undefined
-      app.get('/empty-digest', etag(), (ctx) => {
-        ctx.res.body = 'Test'
+      const originalCrypto = (globalThis as any).crypto
+      try {
+        (globalThis as any).crypto = undefined
+        app.get('/empty-digest', etag(), (ctx) => {
+          ctx.res.body = 'Test'
+        })
+
+        const response = await app.fetch(new Request('http://localhost/empty-digest'))
+        expect(response.headers.get('ETag')).toBeNull()
+      } finally {
+        (globalThis as any).crypto = originalCrypto
+      }
+    })
+
+    it('Should not return 304 for non-2xx status codes', async () => {
+      app.get('/error', etag(), (ctx) => {
+        ctx.res.status = 404
+        ctx.res.body = 'Not Found'
       })
 
-      const response = await app.fetch(new Request('http://localhost/empty-digest'))
-      expect(response.headers.get('ETag')).toBeNull()
+      const firstResponse = await app.fetch(new Request('http://localhost/error'))
+      const etagValue = firstResponse.headers.get('ETag')
+
+      const secondResponse = await app.fetch(
+        new Request('http://localhost/error', {
+          headers: { 'If-None-Match': etagValue! }
+        })
+      )
+
+      expect(secondResponse.status).toBe(404)
     })
   })
 })

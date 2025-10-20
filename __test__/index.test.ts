@@ -148,10 +148,12 @@ describe('Etag middleware', () => {
 
       const response1 = await app.fetch(new Request('http://localhost/content1'))
       const response2 = await app.fetch(new Request('http://localhost/content2'))
-
+      const res1 = await response1.text()
+      const res2 = await response2.text()
       const etag1 = response1.headers.get('ETag')
       const etag2 = response2.headers.get('ETag')
-
+      expect(res1).toBe('Content 1')
+      expect(res2).toBe('Content 2')
       expect(etag1).not.toBeNull()
       expect(etag2).not.toBeNull()
       expect(etag1).not.toEqual(etag2)
@@ -523,6 +525,60 @@ describe('Etag middleware', () => {
       )
 
       expect(secondResponse.status).toBe(404)
+    })
+  })
+
+  describe('Stream consumption scenarios', () => {
+    let app: Hoa
+
+    beforeEach(() => {
+      app = new Hoa()
+      app.extend(router())
+    })
+
+    it('Should handle ReadableStream response body without consuming original stream', async () => {
+      const originalContent = 'Stream content for ETag testing'
+
+      app.get('/stream', etag(), (ctx) => {
+        ctx.res.body = new ReadableStream({
+          start (controller) {
+            controller.enqueue(new TextEncoder().encode(originalContent))
+            controller.close()
+          }
+        })
+      })
+
+      const response = await app.fetch(new Request('http://localhost/stream'))
+      const res = await response.text()
+      expect(res).toBe(originalContent)
+      expect(response.headers.get('ETag')).not.toBeNull()
+    })
+
+    it('Should work with chunked ReadableStream', async () => {
+      const chunks = ['Hello', ' ', 'World', ' ', 'Stream']
+
+      app.get('/chunked', etag(), (ctx) => {
+        let index = 0
+        ctx.res.body = new ReadableStream({
+          start (controller) {
+            function pump () {
+              if (index < chunks.length) {
+                controller.enqueue(new TextEncoder().encode(chunks[index++]))
+                setTimeout(pump, 10)
+              } else {
+                controller.close()
+              }
+            }
+            pump()
+          }
+        })
+      })
+
+      const response = await app.fetch(new Request('http://localhost/chunked'))
+      const res = await response.text()
+
+      expect(res).toBe('Hello World Stream')
+      expect(response.headers.get('ETag')).not.toBeNull()
     })
   })
 })

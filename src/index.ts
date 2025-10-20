@@ -43,7 +43,15 @@ export function etag (options: ETagOptions = {}): HoaMiddleware {
       if (!generator) {
         return
       }
-      const hash = await generateDigest(ctx.response.body, generator)
+      let digestBody: ReadableStream = null
+      if (ctx.response.body instanceof ReadableStream) {
+        const [digestStream, returnStream] = ctx.response.body.tee()
+        ctx.res.body = digestStream
+        digestBody = returnStream
+      } else {
+        digestBody = ctx.response.body
+      }
+      const hash = await generateDigest(digestBody, generator)
       if (hash === null) {
         return
       }
@@ -55,7 +63,6 @@ export function etag (options: ETagOptions = {}): HoaMiddleware {
     // Only return 304 for successful 2xx responses
     const status = ctx.res.status
     if (status >= 200 && status < 300 && etagMatches(etag, ifNoneMatch, method)) {
-      ctx.res.body = null
       ctx.res.status = 304
       for (const h in ctx.res.headers) {
         if (!retainedHeaders.includes(h)) {

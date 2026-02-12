@@ -1,4 +1,4 @@
-import { defineConfig } from 'tsup'
+import { defineConfig } from 'tsdown'
 
 export default defineConfig([
   // ESM build
@@ -13,6 +13,9 @@ export default defineConfig([
     bundle: true,
     outDir: 'dist/esm',
     target: 'es2020',
+    outExtension () {
+      return { js: '.mjs' }
+    },
     esbuildOptions (options) {
       options.drop = ['console', 'debugger']
       options.legalComments = 'none'
@@ -31,7 +34,7 @@ export default defineConfig([
     outDir: 'dist/cjs',
     target: 'es2020',
     outExtension () {
-      return { js: '.js' }
+      return { js: '.cjs' }
     },
     esbuildOptions (options) {
       options.drop = ['console', 'debugger']
